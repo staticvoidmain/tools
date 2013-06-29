@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Express 2012 for Windows Desktop
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tools", "src\Tools.csproj", "{CF2A2FA2-9EE1-4DB1-8F73-FB65D8D4C580}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tools.Test", "test\Tools.Test.csproj", "{9D1F905B-3EF1-44B9-8CC0-026FAA9CEEAD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CF2A2FA2-9EE1-4DB1-8F73-FB65D8D4C580}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF2A2FA2-9EE1-4DB1-8F73-FB65D8D4C580}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF2A2FA2-9EE1-4DB1-8F73-FB65D8D4C580}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF2A2FA2-9EE1-4DB1-8F73-FB65D8D4C580}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9D1F905B-3EF1-44B9-8CC0-026FAA9CEEAD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D1F905B-3EF1-44B9-8CC0-026FAA9CEEAD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9D1F905B-3EF1-44B9-8CC0-026FAA9CEEAD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D1F905B-3EF1-44B9-8CC0-026FAA9CEEAD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
