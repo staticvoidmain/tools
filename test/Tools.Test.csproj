@@ -43,6 +43,7 @@
     <Otherwise />
   </Choose>
   <ItemGroup>
+    <Compile Include="DbMapperTests.cs" />
     <Compile Include="MapperTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
@@ -54,6 +55,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.Data" />
     <Reference Include="xunit">
       <HintPath>..\..\..\tools\xUnit\xunit.dll</HintPath>
     </Reference>

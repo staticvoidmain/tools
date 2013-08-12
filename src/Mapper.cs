@@ -28,13 +28,6 @@ namespace Tools
 		private static readonly Dictionary<int, object> _cache = new Dictionary<int, object>();
 		private static readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
 
-		/// <summary>
-		///		For even better performance call GetMapper and cache the delegate.
-		/// </summary>
-		/// <typeparam name="TSource"></typeparam>
-		/// <typeparam name="TResult"></typeparam>
-		/// <param name="source"></param>
-		/// <returns></returns>
 		public static TResult Map<TSource, TResult>(TSource source)
 		{
 			if (source == null)
