@@ -7,7 +7,7 @@
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Tools.Test</RootNamespace>
-    <AssemblyName>CopyFrom.Test</AssemblyName>
+    <AssemblyName>Tools.Test</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{3AC096D0-A1C2-E12C-1390-A8335801FDAB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
@@ -44,7 +44,9 @@
   </Choose>
   <ItemGroup>
     <Compile Include="DbMapperTests.cs" />
+    <Compile Include="InternalTestClasses\ObjectMapperTestClasses.cs" />
     <Compile Include="MapperTests.cs" />
+    <Compile Include="Northwind\Order.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -57,7 +59,7 @@
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="xunit">
-      <HintPath>..\..\..\tools\xUnit\xunit.dll</HintPath>
+      <HintPath>..\packages\xunit.1.9.1\lib\net20\xunit.dll</HintPath>
     </Reference>
   </ItemGroup>
   <Choose>
