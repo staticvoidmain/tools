@@ -47,6 +47,7 @@
     <Compile Include="InternalTestClasses\ObjectMapperTestClasses.cs" />
     <Compile Include="MapperTests.cs" />
     <Compile Include="Northwind\Order.cs" />
+    <Compile Include="Northwind\OrderStatus.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

@@ -27,9 +27,11 @@ namespace Tools.Test
 
 	public class DbMapperIntegrationTests
 	{
-		public DbMapperIntegrationTests()
+		[Fact]
+		[Trait("TestCategory", "CodeGen")]
+		public void Generate_Mapper_Assembly()
 		{
-			Debugger.Launch();
+			DbMapper.CreateMapperAssembly(new[] { typeof(Order) }, "Northwind.Data", "Northwind.Data.Generated"); 
 		}
 
 		[Fact]
@@ -38,19 +40,37 @@ namespace Tools.Test
 		{
 			List<Order> results = new List<Order>();
 
+			Stopwatch watch = Stopwatch.StartNew();
+
 			using (var connection = CreateConnection())
 			{
+				watch.Stop();
+
+				Debug.WriteLine("connection took {0}ms", watch.ElapsedMilliseconds);
+
+				watch.Reset();
+				watch.Start();
+
 				var cmd = connection.CreateCommand();
 
-				cmd.CommandText = "select OrderID, CustomerID, EmployeeID, OrderDate, Freight from [Orders]";
+				cmd.CommandText = "select OrderID, CustomerID, EmployeeID, OrderDate, Freight, Status from [Orders]";
 
 				var reader = cmd.ExecuteReader();
-				var mapper = DbMapper.GetMapper<Order>();
+
+				watch.Stop();
+				Debug.WriteLine("execute-reader took {0}ms", watch.ElapsedMilliseconds);
+				watch.Reset();
+
+				Func<SqlDataReader, Order> mapper = DbMapper.GetMapper<Order>();
 
 				while (reader.Read())
 				{
 					results.Add(mapper(reader));
 				}
+
+				watch.Stop();
+				Debug.WriteLine("mapping took {0}ms", watch.ElapsedMilliseconds);
+				watch.Reset();
 			}
 
 			Assert.True(results.All(r => 

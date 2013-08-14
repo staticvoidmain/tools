@@ -34,6 +34,8 @@ namespace Tools
 		private static readonly Dictionary<int, object> _cache = new Dictionary<int, object>();
 		private static readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
 
+		private static readonly MethodInfo _GetMapperExpression = typeof(DbMapper).GetMethod("GetMapperExpression", BindingFlags.Static | BindingFlags.NonPublic);
+
 		/// <summary>
 		///		Maps from a data reader result to the requested TResult entity.
 		/// </summary>
@@ -128,12 +130,19 @@ namespace Tools
 
 			if (result == null)
 			{
-				// ok now we're getting into no-man's land
-				result = typeof(Guid) == type 
-					? SqlDataReaderMethods.GetGuid
-					: SqlDataReaderMethods.GetValue;
-
-				// todo: maybe support converters or something.
+				// much like the authors of EF, I forgot enum support. woops!
+				if (type.IsEnum)
+				{
+					result = SqlDataReaderMethods.GetInt32;
+				}
+				else
+				{
+					// ok now we're getting into no-man's land
+					// todo: maybe support converters or something.
+					result = type == typeof(Guid)
+						? SqlDataReaderMethods.GetGuid
+						: SqlDataReaderMethods.GetValue;
+				}
 			}
 
 			return result;
@@ -151,150 +160,6 @@ namespace Tools
 				skipVisibility: true);
 		}
 
-		#region Reflection Emit
-
-#if USE_IL_EMIT
-
-		private static Func<SqlDataReader, TResult> CreateMapping<TResult>()
-		{
-			DynamicMethod m = CreateDynamicMethod<TResult>();
-			ILGenerator il = m.GetILGenerator();
-
-			EmitMapper(typeof(TResult), il);
-
-			return (Func<SqlDataReader, TResult>)m.CreateDelegate(typeof(Func<SqlDataReader, TResult>));
-		}
-
-		private static void EmitMapper(Type resultType, ILGenerator il)
-		{
-			il.DeclareLocal(resultType);
-			il.DeclareLocal(resultType); // duplication intentional
-
-			il.Emit(OpCodes.Nop);
-			il.Emit(OpCodes.Newobj, resultType.GetConstructor(Type.EmptyTypes));
-			il.Emit(OpCodes.Stloc_0);
-
-			// critical: SqlDataReader results must be in the correct order!
-			// note: there will be *some* duplication for deep object heirarchies, but it's probably not a big deal.
-			// uses embedded const ordinal positions instead of locals in the generated method.
-			int ordinalPosition = 0;
-			Collection<LocalBuilder> locals = new Collection<LocalBuilder>();
-
-			foreach (PropertyInfo destinationProperty in resultType.GetProperties())
-			{
-				MethodInfo setter = destinationProperty.GetSetMethod(false);
-
-				if (setter == null)
-					continue;
-
-				Type propertyType = destinationProperty.PropertyType;
-				Type nullableType = Nullable.GetUnderlyingType(destinationProperty.PropertyType);
-
-				MethodInfo reader = GetReaderMethod(nullableType ?? propertyType);
-
-				Label beforeSetter = il.DefineLabel();
-				Label beforeReader = il.DefineLabel();
-
-				il.Emit(OpCodes.Nop);
-				il.Emit(OpCodes.Ldloc_0);
-				il.Emit(OpCodes.Ldarg_0);
-				il.Emit(OpCodes.Ldc_I4, ordinalPosition);
-
-				il.Emit(OpCodes.Callvirt, SqlDataReaderMethods.IsDbNull);
-				il.Emit(OpCodes.Brfalse_S, beforeReader);
-
-				// set default value if IsDBNull.
-				if (destinationProperty.PropertyType.IsValueType == false)
-				{
-					il.Emit(OpCodes.Ldnull);
-				}
-				else
-				{
-					int localIndex = -1;
-					for (int i = 0; i < locals.Count; i++)
-					{
-						if (locals[i].LocalType == destinationProperty.PropertyType)
-						{
-							localIndex = i;
-							break;
-						}
-					}
-
-					if (localIndex == -1)
-					{
-						localIndex = locals.Count;
-						locals.Add(il.DeclareLocal(destinationProperty.PropertyType));
-					}
-
-					var local = locals[localIndex];
-
-					il.Emit(OpCodes.Ldloca_S, local);
-					il.Emit(OpCodes.Initobj, destinationProperty.PropertyType);
-
-					EmitLocal(il, local);
-				}
-
-				il.Emit(OpCodes.Br_S, beforeSetter);
-
-				il.MarkLabel(beforeReader);
-
-				il.Emit(OpCodes.Ldarg_0);
-				il.Emit(OpCodes.Ldc_I4, ordinalPosition);
-				il.Emit(OpCodes.Callvirt, reader);
-
-				if (nullableType != null)
-				{
-					il.Emit(OpCodes.Newobj, propertyType);
-				}
-
-				il.Emit(OpCodes.Nop);
-				il.MarkLabel(beforeSetter);
-
-				il.Emit(OpCodes.Callvirt, setter);
-
-				ordinalPosition++;
-			}
-
-			EmitReturn(il);
-		}
-
-		private static void EmitReturn(ILGenerator il)
-		{
-			Label @return = il.DefineLabel();
-
-			il.Emit(OpCodes.Ldloc_0);
-			il.Emit(OpCodes.Stloc_1);
-			il.Emit(OpCodes.Br_S, @return);
-
-			il.MarkLabel(@return);
-
-			il.Emit(OpCodes.Ret);
-		}
-
-		private static void EmitLocal(ILGenerator il, LocalBuilder local)
-		{
-			int index = local.LocalIndex;
-
-			switch (index)
-			{
-				case 0:
-					il.Emit(OpCodes.Ldloc_0);
-					break;
-				case 1:
-					il.Emit(OpCodes.Ldloc_1);
-					break;
-				case 2:
-					il.Emit(OpCodes.Ldloc_2);
-					break;
-				case 3:
-					il.Emit(OpCodes.Ldloc_3);
-					break;
-				default:
-					il.Emit(OpCodes.Ldloc_S, index);
-					break;
-			}
-		}
-
 		internal static void CreateMapperAssembly(IEnumerable<Type> types, string sourceAssembly, string output)
 		{
 			var name = string.Concat(sourceAssembly, ".Generated");
@@ -310,26 +175,24 @@ namespace Tools
 			{
 				var builder = module.DefineType(string.Concat(type.Name, "DbMapper"), TypeAttributes.Public);
 				var method = builder.DefineMethod("Map", attrs, cc, type, parameters);
-				var generator = method.GetILGenerator();
+				
+				// a little hacky, but it works
+				var create = _GetMapperExpression.MakeGenericMethod(new Type[] { type });
+				var expression = (LambdaExpression)create.Invoke(null, Type.EmptyTypes);
 
-				EmitMapper(type, generator);
+				expression.CompileToMethod(method);
 
 				builder.CreateType();
 			}
 
 			assembly.Save(output);
 		}
-#endif
-
-		#endregion
 
 		#region Expression Trees
 
 		private static Func<SqlDataReader, TResult> CreateMapping<TResult>()
 		{
 			var expression = GetMapperExpression<TResult>();
-
-			Debug.WriteLine(expression.ToString());
 
 			return expression.Compile();
 		}
@@ -374,14 +237,16 @@ namespace Tools
 
 		private static Expression WrapReaderMethodIfNecessary(ParameterExpression reader, MethodInfo method, Type propertyType, Type nullable, int ordinalPosition)
 		{
-			var call = Expression.Call(reader, method, Expression.Constant(ordinalPosition));
+			Expression call = Expression.Call(reader, method, Expression.Constant(ordinalPosition));
+			Type maybeEnum = nullable ?? propertyType;
 
-			if (nullable == null)
-				return call;
+			if (maybeEnum.IsEnum)
+				call = Expression.Convert(call, maybeEnum);
 
-			// new nullable instance.
-			var ctor = propertyType.GetConstructor(new Type[] { nullable });
-			return Expression.New(ctor, call);
+			if (nullable != null)
+				call = Expression.New(propertyType.GetConstructor(new Type[] { nullable }), call);
+
+			return call;
 		}
 
 		#endregion
