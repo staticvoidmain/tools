@@ -210,21 +210,37 @@ namespace Tools
 
 			foreach (PropertyInfo destinationProperty in resultType.GetProperties())
 			{
+				if (IsIndexer(destinationProperty))
+					continue;
+
 				MethodInfo setter = destinationProperty.GetSetMethod(false);
 
 				if (setter == null)
 					continue;
-				
+
 				var propertyType = destinationProperty.PropertyType;
 				var nullableType = Nullable.GetUnderlyingType(destinationProperty.PropertyType);
 				var method = GetReaderMethod(nullableType ?? propertyType);
 				var readerMethod = WrapReaderMethodIfNecessary(reader, method, propertyType, nullableType, ordinalPosition);
 
+				var defaultExpression = Expression.Default(destinationProperty.PropertyType);
+
+				string fieldName;
+				bool simpleSetter = IsSimpleSetter(setter, out fieldName);
+				
+				Expression setValueDefaultExpression = simpleSetter 
+					? (Expression) Expression.Assign(Expression.Field(returnValue, fieldName), defaultExpression)
+					: (Expression) Expression.Call(returnValue, setter, defaultExpression);
+
+				Expression setValueReaderExpression = simpleSetter
+					? (Expression) Expression.Assign(Expression.Field(returnValue, fieldName), readerMethod)
+					: (Expression) Expression.Call(returnValue, setter, readerMethod);
+
 				expressions.Add(
 					Expression.IfThenElse(
 						Expression.Call(reader, SqlDataReaderMethods.IsDbNull, Expression.Constant(ordinalPosition)),
-						Expression.Call(returnValue, setter, Expression.Default(destinationProperty.PropertyType)),
-						Expression.Call(returnValue, setter, readerMethod)));
+						setValueDefaultExpression,
+						setValueReaderExpression));
 
 				ordinalPosition++;
 			}
@@ -233,6 +249,48 @@ namespace Tools
 			var block = Expression.Block(resultType, new[] { returnValue }, expressions);
 
 			return Expression.Lambda<Func<SqlDataReader, TResult>>(block, reader);
+		}
+
+		private static bool IsIndexer(PropertyInfo property)
+		{
+			var indexers = property.GetIndexParameters();
+
+			return indexers.Length > 0;
+		}
+
+		private static bool IsSimpleSetter(MethodInfo setter, out string fieldName)
+		{
+			MethodBody body = setter.GetMethodBody();
+			bool isSimple = false;
+			
+			// out param
+			fieldName = string.Empty;
+
+			if (body.ExceptionHandlingClauses.Count == 0 && body.LocalVariables.Count == 0)
+			{
+				byte[] il = body.GetILAsByteArray();
+
+				if (il.Length == 8)
+				{
+					if (il[0] == OpCodes.Ldarg_0.Value
+ 						&& il[1] == OpCodes.Ldarg_1.Value
+						&& il[2] == OpCodes.Stfld.Value
+						&& il[7] == OpCodes.Ret.Value)
+					{
+						int fieldToken = BitConverter.ToInt32(il, 3);
+						FieldInfo info = setter.DeclaringType.Module.ResolveField(fieldToken);
+
+						if (info != null 
+							&& info.DeclaringType.IsAssignableFrom(setter.DeclaringType))
+						{
+							isSimple = true;
+							fieldName = info.Name;
+						}
+					}
+				}
+			}
+
+			return isSimple;
 		}
 
 		private static Expression WrapReaderMethodIfNecessary(ParameterExpression reader, MethodInfo method, Type propertyType, Type nullable, int ordinalPosition)
