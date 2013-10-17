@@ -28,6 +28,8 @@ namespace Tools
 		private static readonly Dictionary<int, object> _cache = new Dictionary<int, object>();
 		private static readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
 
+		private static readonly MethodInfo _emitMapper = typeof(Mapper).GetMethod("EmitMapper", BindingFlags.Static | BindingFlags.NonPublic);
+
 		public static TResult Map<TSource, TResult>(TSource source)
 		{
 			if (source == null)
@@ -77,35 +79,71 @@ namespace Tools
 			}
 		}
 
-		private static Func<TSource, TResult> CreateMapping<TSource, TResult>()
+		public static Func<TSource, TResult> CreateMapping<TSource, TResult>()
 		{
 			DynamicMethod m = CreateDynamicMethod<TSource, TResult>();
 			ILGenerator il = m.GetILGenerator();
 
+			EmitMapper<TSource, TResult>(il);
+
+			return (Func<TSource, TResult>)m.CreateDelegate(typeof(Func<TSource, TResult>));
+		}
+
+		private static void EmitMapper<TSource, TResult>(ILGenerator il)
+		{
 			il.DeclareLocal(typeof(TResult));
 			il.Emit(OpCodes.Newobj, typeof(TResult).GetConstructor(Type.EmptyTypes));
 			il.Emit(OpCodes.Stloc_0);
 
 			foreach (PropertyInfo destinationProperty in typeof(TResult).GetProperties())
 			{
+				if (MapperUtils.IsIndexer(destinationProperty))
+					continue;
+
 				PropertyInfo sourceProperty = GetSourceProperty<TSource>(destinationProperty);
 
 				if (sourceProperty != null)
 				{
+					if (MapperUtils.IsIndexer(sourceProperty))
+						continue;
+
 					MethodInfo setter = destinationProperty.GetSetMethod(false);
 					MethodInfo getter = sourceProperty.GetGetMethod(false);
 
 					il.Emit(OpCodes.Ldloc_0);
 					il.Emit(OpCodes.Ldarg_0);
-					il.Emit(OpCodes.Callvirt, getter);
-					il.Emit(OpCodes.Callvirt, setter);
+
+					EmitGet(il, getter);
+					EmitSet(il, setter);
 				}
 			}
 
 			il.Emit(OpCodes.Ldloc_0);
 			il.Emit(OpCodes.Ret);
+		}
 
-			return (Func<TSource, TResult>)m.CreateDelegate(typeof(Func<TSource, TResult>));
+		private static void EmitGet(ILGenerator il, MethodInfo getter)
+		{
+			FieldInfo getField;
+			if (MapperUtils.IsSimpleGetter(getter, out getField))
+			{
+				il.Emit(OpCodes.Ldfld, getField);
+				return;
+			}
+
+			il.Emit(OpCodes.Callvirt, getter);
+		}
+
+		private static void EmitSet(ILGenerator il, MethodInfo setter)
+		{
+			FieldInfo setField;
+			if (MapperUtils.IsSimpleSetter(setter, out setField))
+			{
+				il.Emit(OpCodes.Stfld, setField);
+				return;
+			}
+
+			il.Emit(OpCodes.Callvirt, setter);
 		}
 
 		private static PropertyInfo GetSourceProperty<TSource>(PropertyInfo destinationProperty)
@@ -151,6 +189,32 @@ namespace Tools
 			}
 
 			return result;
+		}
+
+		internal static void CreateMapperAssembly(IEnumerable<Tuple<Type, Type>> types, string sourceAssembly, string output)
+		{
+			var name = string.Concat(sourceAssembly, ".Generated");
+			var assemblyName = new AssemblyName() { Name = name };
+			var assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Save);
+			var module = assembly.DefineDynamicModule(name, string.Concat(name, ".dll"), true);
+
+			const MethodAttributes attrs = MethodAttributes.Public | MethodAttributes.Static;
+			const CallingConventions cc = CallingConventions.Standard;
+
+			foreach (var pair in types)
+			{
+				var builder = module.DefineType(string.Concat(pair.Item1.Name, "Mapper"), TypeAttributes.Public);
+				var method = builder.DefineMethod("Map", attrs, cc, pair.Item2, new Type[] { pair.Item1 });
+				var il = method.GetILGenerator();
+
+				var emitter = _emitMapper.MakeGenericMethod(new Type[] { pair.Item1, pair.Item2 });
+
+				emitter.Invoke(null, new[] { il });
+
+				builder.CreateType();
+			}
+
+			assembly.Save(output);
 		}
 	}
 }

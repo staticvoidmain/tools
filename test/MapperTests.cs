@@ -92,4 +92,20 @@ namespace Tools.Test.MapperTests
 			Assert.Throws(typeof(ArgumentNullException), () => Mapper.Map<TypeA, TypeB>(null));
 		}
 	}
+
+	public class MapperIntegrationTests
+	{
+		[Fact]
+		[Trait("TestCategory", "CodeGen")]
+		public void Generate_Mapper_Assembly()
+		{
+			var mappers = new[] 
+			{ 
+				Tuple.Create(typeof(TypeA), typeof(TypeB)),
+				Tuple.Create(typeof(TypeB), typeof(TypeA))
+			};
+
+			Mapper.CreateMapperAssembly(mappers, "Example.Objects", "Example.Objects.Generated");
+		}
+	}
 }

@@ -37,6 +37,7 @@
   <ItemGroup>
     <Compile Include="DbMapper.cs" />
     <Compile Include="Mapper.cs" />
+    <Compile Include="MapperUtils.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

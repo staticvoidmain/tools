@@ -26,7 +26,7 @@ namespace Tools.Test
 	{
 		[Fact]
 		[Trait("TestCategory", "CodeGen")]
-		public void Generate_Mapper_Assembly()
+		public void Generate_DbMapper_Assembly()
 		{
 			DbMapper.CreateMapperAssembly(new[] { typeof(Order) }, "Northwind.Data", "Northwind.Data.Generated");
 		}
