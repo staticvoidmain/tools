@@ -1,4 +1,4 @@
-﻿//	
+﻿//
 //  Mapper.cs, simple property mapping from one object to another using IL Emit caching.
 //  Copyright (C) 2013  Ross Jennings
 //
@@ -23,8 +23,8 @@ namespace Tools
 	using System.Reflection.Emit;
 	using System.Threading;
 
-    public class Mapper
-    {
+	public class Mapper
+	{
 		private static readonly Dictionary<int, object> _cache = new Dictionary<int, object>();
 		private static readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
 
@@ -105,7 +105,7 @@ namespace Tools
 			il.Emit(OpCodes.Ldloc_0);
 			il.Emit(OpCodes.Ret);
 
-			return (Func<TSource, TResult>) m.CreateDelegate(typeof(Func<TSource, TResult>));
+			return (Func<TSource, TResult>)m.CreateDelegate(typeof(Func<TSource, TResult>));
 		}
 
 		private static PropertyInfo GetSourceProperty<TSource>(PropertyInfo destinationProperty)
@@ -113,11 +113,11 @@ namespace Tools
 			const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
 
 			return typeof(TSource).GetProperty(
-				name: destinationProperty.Name, 
+				name: destinationProperty.Name,
 				bindingAttr: flags,
 				binder: null,
 				returnType: destinationProperty.PropertyType,
-				types: Type.EmptyTypes, 
+				types: Type.EmptyTypes,
 				modifiers: null);
 		}
 
@@ -126,12 +126,12 @@ namespace Tools
 			string name = CreateMethodName<TSource, TResult>();
 
 			return new DynamicMethod(
-				name: name, 
+				name: name,
 				attributes: MethodAttributes.Static | MethodAttributes.Public,
 				callingConvention: CallingConventions.Standard,
-				returnType: typeof(TResult), 
+				returnType: typeof(TResult),
 				parameterTypes: new Type[] { typeof(TSource) },
-				owner: typeof(Mapper), 
+				owner: typeof(Mapper),
 				skipVisibility: true);
 		}
 
@@ -152,5 +152,5 @@ namespace Tools
 
 			return result;
 		}
-    }
+	}
 }

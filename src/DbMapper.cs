@@ -18,15 +18,10 @@ namespace Tools
 {
 	using System;
 	using System.Collections.Generic;
-	using System.Collections.ObjectModel;
-	using System.Data.Common;
 	using System.Data.SqlClient;
-	using System.Diagnostics;
-	using System.Linq;
 	using System.Linq.Expressions;
 	using System.Reflection;
 	using System.Reflection.Emit;
-	using System.Runtime.CompilerServices;
 	using System.Threading;
 
 	public class DbMapper
@@ -55,7 +50,7 @@ namespace Tools
 			return mapper(reader);
 		}
 
-		public static Func<SqlDataReader, TResult> GetMapper<TResult>() 
+		public static Func<SqlDataReader, TResult> GetMapper<TResult>()
 			where TResult : new()
 		{
 			int key = typeof(TResult).GetHashCode();
@@ -97,33 +92,43 @@ namespace Tools
 				case TypeCode.String:
 					result = SqlDataReaderMethods.GetString;
 					break;
+
 				case TypeCode.Int16:
 					result = SqlDataReaderMethods.GetInt16;
 					break;
+
 				case TypeCode.Int32:
 					result = SqlDataReaderMethods.GetInt32;
 					break;
+
 				case TypeCode.Int64:
 					result = SqlDataReaderMethods.GetInt64;
 					break;
+
 				case TypeCode.Boolean:
 					result = SqlDataReaderMethods.GetBool;
 					break;
+
 				case TypeCode.Decimal:
 					result = SqlDataReaderMethods.GetDecimal;
 					break;
+
 				case TypeCode.Double:
 					result = SqlDataReaderMethods.GetDouble;
 					break;
+
 				case TypeCode.Single:
 					result = SqlDataReaderMethods.GetFloat;
 					break;
+
 				case TypeCode.DateTime:
 					result = SqlDataReaderMethods.GetDateTime;
 					break;
+
 				case TypeCode.Byte:
 					result = SqlDataReaderMethods.GetByte;
 					break;
+
 				default:
 					break;
 			}
@@ -175,7 +180,7 @@ namespace Tools
 			{
 				var builder = module.DefineType(string.Concat(type.Name, "DbMapper"), TypeAttributes.Public);
 				var method = builder.DefineMethod("Map", attrs, cc, type, parameters);
-				
+
 				// a little hacky, but it works
 				var create = _GetMapperExpression.MakeGenericMethod(new Type[] { type });
 				var expression = (LambdaExpression)create.Invoke(null, Type.EmptyTypes);
@@ -203,7 +208,7 @@ namespace Tools
 			var returnValue = Expression.Variable(resultType, "result");
 			var reader = Expression.Variable(typeof(SqlDataReader), "reader");
 			var expressions = new List<Expression>();
-			
+
 			int ordinalPosition = 0;
 
 			expressions.Add(Expression.Assign(returnValue, Expression.New(resultType)));
@@ -227,14 +232,14 @@ namespace Tools
 
 				string fieldName;
 				bool simpleSetter = IsSimpleSetter(setter, out fieldName);
-				
-				Expression setValueDefaultExpression = simpleSetter 
-					? (Expression) Expression.Assign(Expression.Field(returnValue, fieldName), defaultExpression)
-					: (Expression) Expression.Call(returnValue, setter, defaultExpression);
+
+				Expression setValueDefaultExpression = simpleSetter
+					? (Expression)Expression.Assign(Expression.Field(returnValue, fieldName), defaultExpression)
+					: (Expression)Expression.Call(returnValue, setter, defaultExpression);
 
 				Expression setValueReaderExpression = simpleSetter
-					? (Expression) Expression.Assign(Expression.Field(returnValue, fieldName), readerMethod)
-					: (Expression) Expression.Call(returnValue, setter, readerMethod);
+					? (Expression)Expression.Assign(Expression.Field(returnValue, fieldName), readerMethod)
+					: (Expression)Expression.Call(returnValue, setter, readerMethod);
 
 				expressions.Add(
 					Expression.IfThenElse(
@@ -262,7 +267,7 @@ namespace Tools
 		{
 			MethodBody body = setter.GetMethodBody();
 			bool isSimple = false;
-			
+
 			// out param
 			fieldName = string.Empty;
 
@@ -273,14 +278,14 @@ namespace Tools
 				if (il.Length == 8)
 				{
 					if (il[0] == OpCodes.Ldarg_0.Value
- 						&& il[1] == OpCodes.Ldarg_1.Value
+						&& il[1] == OpCodes.Ldarg_1.Value
 						&& il[2] == OpCodes.Stfld.Value
 						&& il[7] == OpCodes.Ret.Value)
 					{
 						int fieldToken = BitConverter.ToInt32(il, 3);
 						FieldInfo info = setter.DeclaringType.Module.ResolveField(fieldToken);
 
-						if (info != null 
+						if (info != null
 							&& info.DeclaringType.IsAssignableFrom(setter.DeclaringType))
 						{
 							isSimple = true;
@@ -307,7 +312,7 @@ namespace Tools
 			return call;
 		}
 
-		#endregion
+		#endregion Expression Trees
 
 		private static Func<SqlDataReader, TResult> GetMapping<TResult>(int key)
 		{

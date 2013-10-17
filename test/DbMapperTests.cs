@@ -3,22 +3,19 @@ using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Tools.Test.MapperTests;
 using Tools.Test.Northwind;
 using Xunit;
 
 namespace Tools.Test
 {
 	public class DbMapperTests
-	{	
+	{
 		[Fact]
 		public void When_Reader_IsNull_Throws_ArgumentNullException()
 		{
 			SqlDataReader reader = null;
 
-			Assert.Throws(typeof(ArgumentNullException), () => 
+			Assert.Throws(typeof(ArgumentNullException), () =>
 			{
 				DbMapper.Map<Order>(reader);
 			});
@@ -31,7 +28,7 @@ namespace Tools.Test
 		[Trait("TestCategory", "CodeGen")]
 		public void Generate_Mapper_Assembly()
 		{
-			DbMapper.CreateMapperAssembly(new[] { typeof(Order) }, "Northwind.Data", "Northwind.Data.Generated"); 
+			DbMapper.CreateMapperAssembly(new[] { typeof(Order) }, "Northwind.Data", "Northwind.Data.Generated");
 		}
 
 		[Fact]
@@ -73,7 +70,7 @@ namespace Tools.Test
 				watch.Reset();
 			}
 
-			Assert.True(results.All(r => 
+			Assert.True(results.All(r =>
 			{
 				return r != null
 					&& r.OrderID > 0

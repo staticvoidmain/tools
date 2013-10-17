@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
-using Xunit;
-using Tools;
 using Tools.Test.InternalTestClasses;
+using Xunit;
 
 namespace Tools.Test.MapperTests
 {
