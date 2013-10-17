@@ -26,9 +26,17 @@ namespace Tools
 	public class Mapper
 	{
 		private static readonly Dictionary<int, object> _cache = new Dictionary<int, object>();
-		private static readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
-
 		private static readonly MethodInfo _emitMapper = typeof(Mapper).GetMethod("EmitMapper", BindingFlags.Static | BindingFlags.NonPublic);
+		private static readonly ReaderWriterLockSlim _lock = new ReaderWriterLockSlim();
+		public static Func<TSource, TResult> CreateMapping<TSource, TResult>()
+		{
+			DynamicMethod m = CreateDynamicMethod<TSource, TResult>();
+			ILGenerator il = m.GetILGenerator();
+
+			EmitMapper<TSource, TResult>(il);
+
+			return (Func<TSource, TResult>)m.CreateDelegate(typeof(Func<TSource, TResult>));
+		}
 
 		public static TResult Map<TSource, TResult>(TSource source)
 		{
@@ -67,6 +75,52 @@ namespace Tools
 			return mapper(source);
 		}
 
+		/// <summary>
+		/// Emits a mapper assembly, mostly for debugging.
+		/// </summary>
+		/// <param name="types"></param>
+		/// <param name="sourceAssembly"></param>
+		/// <param name="output"></param>
+		internal static void CreateMapperAssembly(IEnumerable<Tuple<Type, Type>> types, string sourceAssembly, string output)
+		{
+			var name = string.Concat(sourceAssembly, ".Generated");
+			var assemblyName = new AssemblyName() { Name = name };
+			var assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Save);
+			var module = assembly.DefineDynamicModule(name, string.Concat(name, ".dll"), true);
+
+			const MethodAttributes attrs = MethodAttributes.Public | MethodAttributes.Static;
+			const CallingConventions cc = CallingConventions.Standard;
+
+			foreach (var pair in types)
+			{
+				var builder = module.DefineType(string.Concat(pair.Item1.Name, "Mapper"), TypeAttributes.Public);
+				var method = builder.DefineMethod("Map", attrs, cc, pair.Item2, new Type[] { pair.Item1 });
+				var il = method.GetILGenerator();
+
+				var emitter = _emitMapper.MakeGenericMethod(new Type[] { pair.Item1, pair.Item2 });
+
+				emitter.Invoke(null, new[] { il });
+
+				builder.CreateType();
+			}
+
+			assembly.Save(output);
+		}
+
+		private static DynamicMethod CreateDynamicMethod<TSource, TResult>()
+		{
+			string name = CreateMethodName<TSource, TResult>();
+
+			return new DynamicMethod(
+				name: name,
+				attributes: MethodAttributes.Static | MethodAttributes.Public,
+				callingConvention: CallingConventions.Standard,
+				returnType: typeof(TResult),
+				parameterTypes: new Type[] { typeof(TSource) },
+				owner: typeof(Mapper),
+				skipVisibility: true);
+		}
+
 		// inspired by tuple's get hashcode
 		private static int CreateKey<T1, T2>()
 		{
@@ -79,14 +133,21 @@ namespace Tools
 			}
 		}
 
-		public static Func<TSource, TResult> CreateMapping<TSource, TResult>()
+		private static string CreateMethodName<T1, T2>()
 		{
-			DynamicMethod m = CreateDynamicMethod<TSource, TResult>();
-			ILGenerator il = m.GetILGenerator();
+			return string.Concat("MapFrom", typeof(T1).Name, "To", typeof(T2).Name);
+		}
 
-			EmitMapper<TSource, TResult>(il);
+		private static void EmitGet(ILGenerator il, MethodInfo getter)
+		{
+			FieldInfo getField;
+			if (MapperUtils.IsSimpleGetter(getter, out getField))
+			{
+				il.Emit(OpCodes.Ldfld, getField);
+				return;
+			}
 
-			return (Func<TSource, TResult>)m.CreateDelegate(typeof(Func<TSource, TResult>));
+			il.Emit(OpCodes.Callvirt, getter);
 		}
 
 		private static void EmitMapper<TSource, TResult>(ILGenerator il)
@@ -121,19 +182,6 @@ namespace Tools
 			il.Emit(OpCodes.Ldloc_0);
 			il.Emit(OpCodes.Ret);
 		}
-
-		private static void EmitGet(ILGenerator il, MethodInfo getter)
-		{
-			FieldInfo getField;
-			if (MapperUtils.IsSimpleGetter(getter, out getField))
-			{
-				il.Emit(OpCodes.Ldfld, getField);
-				return;
-			}
-
-			il.Emit(OpCodes.Callvirt, getter);
-		}
-
 		private static void EmitSet(ILGenerator il, MethodInfo setter)
 		{
 			FieldInfo setField;
@@ -144,38 +192,6 @@ namespace Tools
 			}
 
 			il.Emit(OpCodes.Callvirt, setter);
-		}
-
-		private static PropertyInfo GetSourceProperty<TSource>(PropertyInfo destinationProperty)
-		{
-			const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
-
-			return typeof(TSource).GetProperty(
-				name: destinationProperty.Name,
-				bindingAttr: flags,
-				binder: null,
-				returnType: destinationProperty.PropertyType,
-				types: Type.EmptyTypes,
-				modifiers: null);
-		}
-
-		private static DynamicMethod CreateDynamicMethod<TSource, TResult>()
-		{
-			string name = CreateMethodName<TSource, TResult>();
-
-			return new DynamicMethod(
-				name: name,
-				attributes: MethodAttributes.Static | MethodAttributes.Public,
-				callingConvention: CallingConventions.Standard,
-				returnType: typeof(TResult),
-				parameterTypes: new Type[] { typeof(TSource) },
-				owner: typeof(Mapper),
-				skipVisibility: true);
-		}
-
-		private static string CreateMethodName<T1, T2>()
-		{
-			return string.Concat("MappingFrom", typeof(T1).Name, "To", typeof(T2).Name);
 		}
 
 		private static Func<T1, T2> GetMapping<T1, T2>(int key)
@@ -191,30 +207,17 @@ namespace Tools
 			return result;
 		}
 
-		internal static void CreateMapperAssembly(IEnumerable<Tuple<Type, Type>> types, string sourceAssembly, string output)
+		private static PropertyInfo GetSourceProperty<TSource>(PropertyInfo destinationProperty)
 		{
-			var name = string.Concat(sourceAssembly, ".Generated");
-			var assemblyName = new AssemblyName() { Name = name };
-			var assembly = AppDomain.CurrentDomain.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Save);
-			var module = assembly.DefineDynamicModule(name, string.Concat(name, ".dll"), true);
+			const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance;
 
-			const MethodAttributes attrs = MethodAttributes.Public | MethodAttributes.Static;
-			const CallingConventions cc = CallingConventions.Standard;
-
-			foreach (var pair in types)
-			{
-				var builder = module.DefineType(string.Concat(pair.Item1.Name, "Mapper"), TypeAttributes.Public);
-				var method = builder.DefineMethod("Map", attrs, cc, pair.Item2, new Type[] { pair.Item1 });
-				var il = method.GetILGenerator();
-
-				var emitter = _emitMapper.MakeGenericMethod(new Type[] { pair.Item1, pair.Item2 });
-
-				emitter.Invoke(null, new[] { il });
-
-				builder.CreateType();
-			}
-
-			assembly.Save(output);
+			return typeof(TSource).GetProperty(
+				name: destinationProperty.Name,
+				bindingAttr: flags,
+				binder: null,
+				returnType: destinationProperty.PropertyType,
+				types: Type.EmptyTypes,
+				modifiers: null);
 		}
 	}
 }
